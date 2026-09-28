@@ -1,0 +1,24 @@
+# MediClaim / ClaimGen AI - backend dependencies
+# Install with:  py -m pip install -r requirements.txt
+
+# --- Web framework ---------------------------------------------------------
+fastapi>=0.115.0
+# Plain uvicorn, not uvicorn[standard]: the [standard] extra pulls in watchfiles
+# and uvloop, which are compiled wheels that frequently fail to install offline
+# or behind a slow index. `uvicorn --reload` works without them.
+uvicorn>=0.32.0
+python-multipart>=0.0.12          # required for multipart/form-data uploads
+
+# --- Configuration ---------------------------------------------------------
+python-dotenv>=1.0.1
+pydantic>=2.9.0
+
+# --- Google Gen AI SDK (official) -----------------------------------------
+google-genai>=1.0.0
+
+# --- Deterministic PDF generation -----------------------------------------
+reportlab>=4.2.0
+
+# --- Optional: embedded text layer of sample PDFs in offline mode ---------
+# Only used when GEMINI_API_KEY is missing, so the demo still runs end to end.
+pypdf>=5.1.0

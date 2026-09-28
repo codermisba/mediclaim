@@ -1,0 +1,11 @@
+INFO:     Will watch for changes in these directories: ['E:\\WEB\\mediclaim\\claimgen-ai-solo\\backend']
+INFO:     Uvicorn running on http://127.0.0.1:8080 (Press CTRL+C to quit)
+INFO:     Started reloader process [13500] using StatReload
+INFO:     Started server process [14596]
+INFO:     Waiting for application startup.
+16:49:43  INFO    mediclaim.api              ==========================================================================
+16:49:43  INFO    mediclaim.api                ClaimGen AI 1.0.0
+16:49:45  INFO    mediclaim.api                AI mode: Gemini connected.
+16:49:45  INFO    mediclaim.api                Claims folder: E:\WEB\mediclaim\claimgen-ai-solo\backend\data\claims
+16:49:45  INFO    mediclaim.api              ==========================================================================
+INFO:     Application startup complete.

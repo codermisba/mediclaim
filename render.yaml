@@ -1,0 +1,54 @@
+# ---------------------------------------------------------------------------
+# Render blueprint for the MediClaim / ClaimGen AI backend.
+#   Dashboard -> New -> Blueprint -> point it at this repository.
+# The service is created with rootDir=backend, so paths in config.py resolve
+# exactly as they do on your machine.
+# ---------------------------------------------------------------------------
+
+services:
+  - type: web
+    name: mediclaim-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    pythonVersion: "3.12"
+    buildCommand: pip install --no-cache-dir -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /api/live
+    autoDeploy: true
+    envVars:
+      # --- required -------------------------------------------------------
+      # Add your Gemini key manually in the Render dashboard (it is a secret
+      # and must never be committed). Leave it unset to run deterministically.
+      - key: GEMINI_API_KEY
+        sync: false
+      # --- model selection ------------------------------------------------
+      # The 2.5 models are retired and now return 404 to new API keys.
+      - key: GEMINI_MODEL_EXTRACTION
+        value: gemini-3.8-flash
+      - key: GEMINI_MODEL_REASONING
+        value: gemini-3.8-flash
+      - key: GEMINI_MODEL_REVIEW
+        value: gemini-3.8-flash
+      # --- CORS -----------------------------------------------------------
+      # Replace with your Vercel URL(s), comma separated. localhost is kept so
+      # the app still works while developing against the deployed API.
+      - key: CORS_ORIGINS
+        value: http://localhost:5173,http://localhost:5174,https://your-app.vercel.app
+      # --- app ------------------------------------------------------------
+      - key: APP_NAME
+        value: ClaimGen AI
+      - key: LOG_LEVEL
+        value: INFO
+      - key: MAX_UPLOAD_MB
+        value: "20"
+      - key: MAX_DOCUMENTS_PER_CLAIM
+        value: "10"
+      # --- storage --------------------------------------------------------
+      # The free tier's filesystem is ephemeral: uploaded documents and saved
+      # claims disappear on redeploy or restart. Set PERSIST_CLAIMS=false to
+      # keep the service stateless, or attach a disk / use object storage.
+      - key: PERSIST_CLAIMS
+        value: "true"
+      - key: FORCE_OFFLINE
+        value: "0"
