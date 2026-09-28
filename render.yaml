@@ -34,7 +34,7 @@ services:
       # Replace with your Vercel URL(s), comma separated. localhost is kept so
       # the app still works while developing against the deployed API.
       - key: CORS_ORIGINS
-        value: http://localhost:5173,http://localhost:5174,https://your-app.vercel.app
+        value: http://localhost:5173,http://localhost:5174,https://mediclaim-nine.vercel.app/
       # --- app ------------------------------------------------------------
       - key: APP_NAME
         value: ClaimGen AI
