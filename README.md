@@ -1,5 +1,3 @@
-Yes. Here is the **entire README as one single Markdown block**, ready to copy directly into `README.md`.
-
 ````markdown
 # MediClaim · ClaimGen AI
 
@@ -1091,13 +1089,6 @@ MediClaim does not provide medical, clinical, legal, or insurance advice and doe
 
 # License
 
-Add your preferred license here.
-
-For example:
-
 ```text
 MIT License
-```
-
-```
 ```
