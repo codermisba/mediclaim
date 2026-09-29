@@ -1,4 +1,4 @@
-"""Shared Gemini plumbing: client creation, schema sanitising, structured calls.
+﻿"""Shared Gemini plumbing: client creation, schema sanitising, structured calls.
 
 Every AI call in the application goes through :func:`run_structured`. Agents
 never talk to the SDK directly, which keeps model names, retries, timeouts and
@@ -59,10 +59,12 @@ _UNSUPPORTED_SCHEMA_KEYS = {
 }
 
 
-class GeminiError(RuntimeError):
-    """Raised when a Gemini call cannot produce a usable structured payload.
+class ModelError(RuntimeError):
+    """Raised when a model call cannot produce a usable structured payload.
 
-    ``kind`` drives both the retry policy and the hint shown in the UI:
+    Shared by every AI provider (Hugging Face, Gemini) so agents only ever
+    handle one exception type. ``kind`` drives both the retry policy and the
+    hint shown in the UI:
 
     ``auth``       the key is missing/wrong            -> never retry
     ``model``      the model is retired or not enabled -> never retry
@@ -79,12 +81,14 @@ class GeminiError(RuntimeError):
         hint: str = "",
         model: str = "",
         kind: str = "unknown",
+        code: str = "llm_error",
     ):
         super().__init__(message)
         self.message = message
         self.hint = hint
         self.model = model
         self.kind = kind
+        self.code = code
 
     @property
     def retryable(self) -> bool:
@@ -94,10 +98,14 @@ class GeminiError(RuntimeError):
         return {
             "detail": self.message,
             "hint": self.hint,
-            "code": "gemini_error",
+            "code": self.code,
             "kind": self.kind,
             "model": self.model,
         }
+
+
+#: Backwards-compatible name - the class is now provider neutral.
+GeminiError = ModelError
 
 
 #: Kinds that will never succeed on a retry, so the loop stops immediately.
@@ -108,7 +116,7 @@ FATAL_KINDS = {"auth", "model", "quota"}
 DEGRADE_KINDS = {"quota", "overloaded"}
 
 
-def classify_exception(exc: Exception, model_name: str = "") -> GeminiError:
+def classify_exception(exc: Exception, model_name: str = "") -> ModelError:
     """Turn an arbitrary SDK/network exception into a typed, actionable error.
 
     Google returns a very consistent error body, so classification is done on
@@ -125,8 +133,8 @@ def classify_exception(exc: Exception, model_name: str = "") -> GeminiError:
             code = str(getattr(value, "value", value)).upper()
             break
 
-    def error(code_hint: str, kind: str, hint: str, summary: str) -> GeminiError:
-        return GeminiError(f"{summary} (model={model_name or 'unknown'}).", hint=hint,
+    def error(code_hint: str, kind: str, hint: str, summary: str) -> ModelError:
+        return ModelError(f"{summary} (model={model_name or 'unknown'}).", hint=hint,
                            model=model_name, kind=kind)
 
     if code in {"401", "403"} or "api key not valid" in lowered or "api_key" in lowered:
@@ -160,7 +168,7 @@ def classify_exception(exc: Exception, model_name: str = "") -> GeminiError:
                      "and the model configuration.",
                      "Gemini rejected the request")
 
-    return GeminiError(f"Gemini request failed: {message}", model=model_name)
+    return ModelError(f"Gemini request failed: {message}", model=model_name)
 
 
 # ---------------------------------------------------------------------------
@@ -376,23 +384,23 @@ def _coerce(text: str, model_cls: Type[T], model_name: str) -> T:
         cleaned = re.sub(r"^```[a-zA-Z]*\s*", "", cleaned)
         cleaned = re.sub(r"```\s*$", "", cleaned).strip()
     if not cleaned:
-        raise GeminiError("Gemini returned an empty response.", model=model_name)
+        raise ModelError("Gemini returned an empty response.", model=model_name)
     try:
         payload = json.loads(cleaned)
     except json.JSONDecodeError as exc:
-        raise GeminiError(
+        raise ModelError(
             f"Gemini returned invalid JSON: {exc.msg} (line {exc.lineno}).",
             hint="This is usually a transient model issue - retry the step.",
             model=model_name,
         ) from exc
     if not isinstance(payload, dict):
-        raise GeminiError("Gemini returned JSON that is not an object.", model=model_name)
+        raise ModelError("Gemini returned JSON that is not an object.", model=model_name)
     try:
         return model_cls.model_validate(payload)
     except ValidationError as exc:
         first = exc.errors()[0] if exc.errors() else {}
         location = ".".join(str(part) for part in first.get("loc", ())) or "(root)"
-        raise GeminiError(
+        raise ModelError(
             f"Gemini response did not match {model_cls.__name__} at '{location}'.",
             hint=first.get("msg", ""),
             model=model_name,
@@ -416,7 +424,7 @@ async def run_structured(
     """
     client = get_client()
     if client is None:
-        raise GeminiError(
+        raise ModelError(
             _client_error or "Gemini is not available.",
             hint="Set GEMINI_API_KEY in .env and restart the backend.",
         )
@@ -430,7 +438,7 @@ async def run_structured(
     attempts = max_attempts or settings.max_attempts
     contents = build_contents(prompt, documents)
     config = _config(response_model, temperature, system_instruction)
-    last_error: Optional[GeminiError] = None
+    last_error: Optional[ModelError] = None
 
     for attempt in range(1, attempts + 1):
         try:
@@ -444,7 +452,7 @@ async def run_structured(
             if not text:
                 block = getattr(response, "candidates", [None])[0]
                 reason = getattr(getattr(block, "finish_reason", None), "__str__", lambda: "")()
-                raise GeminiError(
+                raise ModelError(
                     "Gemini returned no text content"
                     + (f" (finish_reason={reason})." if reason else "."),
                     hint="Check the prompt for content that triggers safety filters.",
@@ -452,7 +460,7 @@ async def run_structured(
                     kind="content",
                 )
             return _coerce(text, response_model, model_name)
-        except GeminiError as exc:
+        except ModelError as exc:
             last_error = exc
         except Exception as exc:  # network, quota, unknown SDK errors
             last_error = classify_exception(exc, model_name)
@@ -497,7 +505,7 @@ async def try_structured(
     """
     try:
         return await run_structured(**kwargs), ""
-    except GeminiError as exc:
+    except ModelError as exc:
         if exc.kind not in DEGRADE_KINDS:
             raise
         note = (

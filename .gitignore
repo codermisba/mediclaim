@@ -25,6 +25,12 @@ backend/data/claims/*
 backend/data/samples/*
 !backend/data/samples/.gitkeep
 
+# local server output and smoke-test artefacts
+*.log
+*.err
+backend/_smoke_claim.pdf
+backend/_find_model.py
+
 # ----------------------------------------------------------------- frontend
 node_modules/
 dist/

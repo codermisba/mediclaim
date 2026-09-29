@@ -1,4 +1,4 @@
-"""Agent 4 - Claim Generation.
+﻿"""Agent 4 - Claim Generation.
 
 Turns a validated :class:`ClaimData` into a standardised insurance claim form
 as **structured JSON only**. The model never touches layout, fonts or pages -
@@ -20,7 +20,7 @@ from typing import List, Tuple
 
 from config import settings
 from models.schemas import ClaimData, ClaimLineItem, GeneratedClaim, ValidationResult
-from services import gemini, normalize
+from services import llm, normalize
 from services.normalize import clean_text, is_blank
 
 logger = logging.getLogger("mediclaim.agent.generation")
@@ -282,7 +282,7 @@ async def run(
     used_ai = False
     degrade_note = ""
 
-    if gemini.ai_mode() == "gemini":
+    if llm.ai_mode() != "offline_deterministic":
         prompt = PROMPT_TEMPLATE.format(
             claim_block=claim.model_dump_json(indent=2, exclude={"field_evidence"}),
             validation_block=(
@@ -292,9 +292,9 @@ async def run(
             ),
             document_block="\n".join(f"- {name}" for name in document_filenames) or "- none",
             rule_block=_rule_block(claim),
-            schema=gemini.schema_hint(GeneratedClaim),
+            schema=llm.schema_hint(GeneratedClaim),
         )
-        model_result, degrade_note = await gemini.try_structured(
+        model_result, degrade_note = await llm.try_structured(
             model_name=settings.model_extraction,
             system_instruction=SYSTEM_INSTRUCTION,
             prompt=prompt,

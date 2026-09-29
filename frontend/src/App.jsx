@@ -8,6 +8,7 @@ import ValidationPanel from './components/ValidationPanel.jsx'
 import GeneratedPanel from './components/GeneratedPanel.jsx'
 import ReviewPanel from './components/ReviewPanel.jsx'
 import ClaimOverview from './components/ClaimOverview.jsx'
+import Landing from './components/Landing.jsx'
 import { Empty, ErrorBanner, Money, NoticeBanner, Pill } from './components/Primitives.jsx'
 
 const POLL_MS = 1200
@@ -122,6 +123,9 @@ export default function App() {
   const brokenModels = Object.entries(health?.model_checks ?? {}).filter(
     ([, check]) => check.ok !== 'true',
   )
+  // The UI must not promise a provider that is not actually in use.
+  const providerName =
+    aiMode === 'huggingface' ? 'Hugging Face' : aiMode === 'gemini' ? 'Gemini' : 'offline engine'
 
   return (
     <div className="app">
@@ -143,10 +147,10 @@ export default function App() {
           >
             <span className="pip" />
             {degraded
-              ? 'Gemini partially unavailable'
+              ? `${providerName} partially unavailable`
               : offline
                 ? 'offline deterministic mode'
-                : 'Gemini connected'}
+                : `${providerName} connected`}
           </span>
         ) : null}
         {health?.models ? (
@@ -157,7 +161,7 @@ export default function App() {
       </div>
 
       {degraded ? (
-        <NoticeBanner tone="warning" title="Gemini is only partly available">
+        <NoticeBanner tone="warning" title={`${providerName} is only partly available`}>
           <div>{health.message}</div>
           <ul style={{ margin: '5px 0 0 16px' }}>
             {brokenModels.map(([name, check]) => (
@@ -169,7 +173,7 @@ export default function App() {
         </NoticeBanner>
       ) : null}
       {claim?.ai_notice ? (
-        <NoticeBanner tone="warning" title="Some stages ran without Gemini">
+        <NoticeBanner tone="warning" title="Some stages ran without the AI model">
           {claim.ai_notice}
         </NoticeBanner>
       ) : null}
@@ -223,11 +227,14 @@ export default function App() {
           <ErrorBanner error={error} onClose={() => setError(null)} />
 
           {!claim ? (
-            <div className="card">
-              <Empty>
-                Create a claim from the sample data to watch the agents work, or start your own.
-              </Empty>
-            </div>
+            <Landing
+              onStart={() =>
+                document.querySelector('.sidebar form')?.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'center',
+                })
+              }
+            />
           ) : (
             <>
               <div className="card claim-header">
@@ -240,10 +247,11 @@ export default function App() {
                 <div className="body">
                   {offline ? (
                     <div className="notice">
-                      <b>GEMINI_API_KEY is not set, so the agents are running deterministically.</b>
+                      <b>No AI token is configured, so the agents are running deterministically.</b>
                       They only read the text layer of your PDFs; images and scanned pages are not
-                      analysed, and no AI calls are made. Copy <code>.env.example</code> to{' '}
-                      <code>.env</code>, add your key, and restart the backend to switch to Gemini.
+                      analysed, and no model calls are made. Copy <code>.env.example</code> to{' '}
+                      <code>.env</code>, add your <code>HF_TOKEN</code>, and restart the backend to
+                      enable the model.
                     </div>
                   ) : null}
 
@@ -329,10 +337,53 @@ export default function App() {
           )}
         </main>
       </div>
-      <div className="footer">
-        MediClaim &middot; ClaimGen AI {health?.version ? `v${health.version}` : ''} &middot; drafts
-        only &mdash; every field must be verified by an authorised human before submission.
-      </div>
+      <footer className="footer">
+        <div className="foot-top">
+          <div className="foot-brand">
+            <span className="logo">M</span>
+            <div>
+              <b>MediClaim &middot; ClaimGen AI</b>
+              <span>
+                A multi-agent pipeline that turns medical documents into a structured,
+                human-verifiable insurance claim draft.
+              </span>
+            </div>
+          </div>
+          <div className="foot-cols">
+            <div>
+              <h4>Product</h4>
+              <span>Document analysis</span>
+              <span>Field extraction</span>
+              <span>Validation rules</span>
+              <span>PDF claim form</span>
+            </div>
+            <div>
+              <h4>Pipeline</h4>
+              <span>Six specialised agents</span>
+              <span>Typed Pydantic records</span>
+              <span>Deterministic fallback</span>
+              <span>Provenance per field</span>
+            </div>
+            <div>
+              <h4>Stack</h4>
+              <span>FastAPI + Pydantic</span>
+              <span>React 18 + Vite</span>
+              <span>Hugging Face / Gemini</span>
+              <span>Render + Vercel</span>
+            </div>
+          </div>
+        </div>
+        <div className="foot-bottom">
+          <span>
+            MediClaim {health?.version ? `v${health.version}` : ''} &middot;{' '}
+            {health?.app_name ?? 'ClaimGen AI'}
+          </span>
+          <span className="disclaimer">
+            Draft output only &mdash; no medical or coverage advice, no claim approval. Every field
+            must be verified by an authorised human before submission.
+          </span>
+        </div>
+      </footer>
     </div>
   )
 }

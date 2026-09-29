@@ -1,4 +1,4 @@
-"""MediClaim / ClaimGen AI - FastAPI application.
+﻿"""MediClaim / ClaimGen AI - FastAPI application.
 
     uvicorn main:app --reload      (run from the backend/ directory)
 
@@ -34,7 +34,7 @@ from models.schemas import (
     UserInput,
     build_default_stages,
 )
-from services import gemini, pipeline, sample_data, store
+from services import llm, pipeline, sample_data, store
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.INFO),
@@ -51,15 +51,16 @@ _RUNNING: Dict[str, asyncio.Task] = {}
 async def lifespan(app: FastAPI):
     logger.info("=" * 74)
     logger.info("  %s %s", settings.app_name, settings.app_version)
-    logger.info("  AI mode: %s", gemini.client_status()["message"])
+    logger.info("  AI mode: %s", llm.client_status()["message"])
     logger.info("  Claims folder: %s", store.CLAIM_STORE_DIR)
     logger.info("=" * 74)
     yield
     for task in list(_RUNNING.values()):
         task.cancel()
-    if settings.gemini_configured:
+    client = llm.get_client()
+    if client is not None:
         try:
-            gemini.get_client().close()
+            client.close()
         except Exception:  # noqa: BLE001 - shutdown must not raise
             pass
 
@@ -138,20 +139,21 @@ async def live() -> Dict[str, str]:
 
 @app.get("/api/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
-    status = gemini.client_status()
+    status = llm.client_status()
     checks: Dict[str, Any] = {}
     message = status["message"]
 
-    if status["mode"] == "gemini":
-        # Prove the configured models actually answer. A valid key is not
-        # enough - retired model names still authenticate successfully.
-        checks = await asyncio.to_thread(gemini.verify_models)
+    if status["mode"] != "offline_deterministic":
+        # Prove the configured models actually answer. A valid token is not
+        # enough - retired or unserved model names still authenticate cleanly.
+        checks = await asyncio.to_thread(llm.verify_models)
         broken = {m: c for m, c in checks.items() if c.get("ok") != "true"}
         if broken:
+            provider = "Hugging Face" if status["mode"] == "huggingface" else "Gemini"
             names = ", ".join(broken)
             first = next(iter(broken.values()))
             message = (
-                f"Gemini is reachable but {len(broken)} of {len(checks)} configured "
+                f"{provider} is reachable but {len(broken)} of {len(checks)} configured "
                 f"model(s) cannot be used: {names}. "
                 f"{first.get('detail', '')} {first.get('hint', '')}".strip()
             )
@@ -188,7 +190,7 @@ async def list_claims() -> Dict[str, Any]:
     return {
         "claims": [record.to_summary().model_dump(mode="json") for record in records],
         "count": len(records),
-        "ai_mode": gemini.ai_mode(),
+        "ai_mode": llm.ai_mode(),
     }
 
 
@@ -229,7 +231,7 @@ async def create_claim(payload: CreateClaimRequest = Body(default_factory=Create
         status="draft",
         created_at=store.utc_now(),
         updated_at=store.utc_now(),
-        ai_mode=gemini.ai_mode(),  # type: ignore[arg-type]
+        ai_mode=llm.ai_mode(),  # type: ignore[arg-type]
         input_data=input_data,
         documents=documents,
         stages=build_default_stages(),

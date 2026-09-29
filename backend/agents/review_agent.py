@@ -1,4 +1,4 @@
-"""Agent 5 - Review.
+﻿"""Agent 5 - Review.
 
 The last gate before the draft is shown to the user. It compares the generated
 claim form against the merged claim data and against the raw document snapshot,
@@ -24,7 +24,7 @@ from models.schemas import (
     ReviewResult,
     ValidationResult,
 )
-from services import gemini, normalize
+from services import llm, normalize
 from services.normalize import clean_text
 
 logger = logging.getLogger("mediclaim.agent.review")
@@ -331,15 +331,15 @@ async def run(
     used_ai = False
     degrade_note = ""
 
-    if gemini.ai_mode() == "gemini":
+    if llm.ai_mode() != "offline_deterministic":
         prompt = PROMPT_TEMPLATE.format(
             document_block=_json(_source_snapshot(understanding) or {"note": "no documents were uploaded"}),
             claim_block=_json(claim.model_dump(exclude={"field_evidence", "field_sources"})),
             draft_block=_json(generated.model_dump()),
             field_list="\n".join(f"- {path}: {label}" for path, label in _DRAFT_FIELDS.items()),
-            schema=gemini.schema_hint(ReviewResult),
+            schema=llm.schema_hint(ReviewResult),
         )
-        model_result, degrade_note = await gemini.try_structured(
+        model_result, degrade_note = await llm.try_structured(
             model_name=settings.model_review,
             system_instruction=SYSTEM_INSTRUCTION,
             prompt=prompt,

@@ -18,12 +18,29 @@ services:
     autoDeploy: true
     envVars:
       # --- required -------------------------------------------------------
-      # Add your Gemini key manually in the Render dashboard (it is a secret
-      # and must never be committed). Leave it unset to run deterministically.
+      # Add your Hugging Face token manually in the Render dashboard (it is a
+      # secret and must never be committed). Create one, free:
+      #   https://huggingface.co/settings/tokens   -> "Fine-grained", Read access
+      # Leave it unset to run deterministically with no AI calls at all.
+      - key: HF_TOKEN
+        sync: false
+      # --- provider selection ---------------------------------------------
+      #   huggingface (default) | gemini | offline
+      - key: AI_PROVIDER
+        value: huggingface
+      # --- model selection ------------------------------------------------
+      # Any model served by HF Inference Providers. Change these and redeploy
+      # if GET /api/health reports the model is unavailable.
+      - key: HF_MODEL_EXTRACTION
+        value: Qwen/Qwen2.5-72B-Instruct
+      - key: HF_MODEL_REASONING
+        value: Qwen/Qwen2.5-72B-Instruct
+      - key: HF_MODEL_REVIEW
+        value: Qwen/Qwen2.5-72B-Instruct
+      # --- optional: Google Gemini as an alternative -----------------------
+      # Only used when AI_PROVIDER=gemini. Leave the key unset otherwise.
       - key: GEMINI_API_KEY
         sync: false
-      # --- model selection ------------------------------------------------
-      # The 2.5 models are retired and now return 404 to new API keys.
       - key: GEMINI_MODEL_EXTRACTION
         value: gemini-3.8-flash
       - key: GEMINI_MODEL_REASONING
@@ -31,10 +48,11 @@ services:
       - key: GEMINI_MODEL_REVIEW
         value: gemini-3.8-flash
       # --- CORS -----------------------------------------------------------
-      # Replace with your Vercel URL(s), comma separated. localhost is kept so
-      # the app still works while developing against the deployed API.
+      # Comma separated browser origins. The value must match what the browser
+      # sends EXACTLY - no trailing slash, or the preflight will be rejected.
+      # Replace the Vercel URL after you deploy the frontend.
       - key: CORS_ORIGINS
-        value: http://localhost:5173,http://localhost:5174,https://mediclaim-nine.vercel.app/
+        value: http://localhost:5173,http://localhost:5174,https://mediclaim-nine.vercel.app
       # --- app ------------------------------------------------------------
       - key: APP_NAME
         value: ClaimGen AI

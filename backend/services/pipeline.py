@@ -1,4 +1,4 @@
-"""Sequential agent pipeline.
+﻿"""Sequential agent pipeline.
 
     Input -> Document Analysis -> Information Extraction -> Validation
           -> Claim Generation -> Final Review -> PDF
@@ -28,7 +28,7 @@ from agents import (
 from agents.base import AgentError, finish_stage, stage
 from config import CLAIM_STORE_DIR, settings
 from models.schemas import ClaimRecord
-from services import gemini, store
+from services import llm, store
 from services.pdf_generator import build_claim_pdf
 
 logger = logging.getLogger("mediclaim.pipeline")
@@ -42,9 +42,9 @@ DISCLAIMER = (
 )
 
 AI_MODE_WARNING = (
-    "GEMINI_API_KEY is not configured, so this claim was produced by the deterministic "
-    "offline reader instead of Gemini. Text-based PDFs were parsed; images and scanned "
-    "documents were not analysed. Set the key in .env and re-run the pipeline."
+    "No AI provider was configured, so this claim was produced by the deterministic "
+    "offline reader instead. Text-based PDFs were parsed; images and scanned documents "
+    "were not analysed. Set HF_TOKEN in .env and re-run the pipeline."
 )
 
 DRAFT_NOTICE = (
@@ -63,7 +63,7 @@ def _document_kinds(record: ClaimRecord) -> List[str]:
 
 
 def _mark_input_done(record: ClaimRecord, message: str, detail: str) -> None:
-    status = "warning" if gemini.ai_mode() != "gemini" else "completed"
+    status = "warning" if llm.ai_mode() == "offline_deterministic" else "completed"
     if not detail:
         detail = "Details are ready for the agents"
     finish_stage(record, "input", status, message, detail)
@@ -83,7 +83,7 @@ async def run_pipeline(record: ClaimRecord, regenerate: bool = True) -> ClaimRec
         record.input_data = input_data
         record.title = title
 
-    record.ai_mode = gemini.ai_mode()  # type: ignore[assignment]
+    record.ai_mode = llm.ai_mode()  # type: ignore[assignment]
     record.status = "processing"
     record.error = ""
     record.ai_notice = ""
@@ -232,7 +232,7 @@ def _stage_done(
         # like a clean success.
         status = "warning" if status == "completed" else status
         detail = (detail + " - " if detail else "") + "deterministic mode (no AI)"
-        if record.ai_mode == "gemini" and not record.ai_notice:
+        if record.ai_mode != "offline_deterministic" and not record.ai_notice:
             record.ai_notice = (
                 "At least one stage could not reach Gemini (quota or a temporarily "
                 "overloaded endpoint) and fell back to the deterministic engine. "

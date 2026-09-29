@@ -1,4 +1,4 @@
-"""Agent 2 - Information Extraction.
+﻿"""Agent 2 - Information Extraction.
 
 Merges what the patient typed with what the Document Understanding Agent read,
 removes duplicate/conflicting values and normalises names, dates, money and
@@ -24,7 +24,7 @@ from models.schemas import (
     LineItem,
     UserInput,
 )
-from services import gemini, normalize
+from services import llm, normalize
 from services.normalize import clean_text, is_blank
 
 logger = logging.getLogger("mediclaim.agent.extraction")
@@ -378,7 +378,7 @@ async def run(
     model_values: Dict[str, Any] = {}
     used_ai = False
     degrade_note = ""
-    if gemini.ai_mode() == "gemini":
+    if llm.ai_mode() != "offline_deterministic":
         prompt = PROMPT_TEMPLATE.format(
             document_block=_model_block(
                 {k: v for k, v in documents.items() if not is_blank(v) and k != "__line_items__"},
@@ -387,9 +387,9 @@ async def run(
             user_block=_model_block(typed, "2. Values typed by the patient into the form"),
             conflict_block=_conflict_lines(typed, documents),
             field_map="\n".join(f"- {path}: {meaning}" for path, meaning in FIELD_HELP.items()),
-            schema=gemini.schema_hint(ClaimData),
+            schema=llm.schema_hint(ClaimData),
         )
-        model_result, degrade_note = await gemini.try_structured(
+        model_result, degrade_note = await llm.try_structured(
             model_name=settings.model_extraction,
             system_instruction=SYSTEM_INSTRUCTION,
             prompt=prompt,

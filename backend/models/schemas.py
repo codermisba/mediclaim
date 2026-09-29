@@ -547,7 +547,7 @@ class ClaimRecord(AgentModel):
     ] = "draft"
     created_at: str = ""
     updated_at: str = ""
-    ai_mode: Literal["gemini", "offline_deterministic"] = "gemini"
+    ai_mode: Literal["huggingface", "gemini", "offline_deterministic"] = "huggingface"
     input_data: UserInput = Field(default_factory=UserInput)
     documents: List[DocumentMeta] = Field(default_factory=list)
     stages: List[PipelineStage] = Field(default_factory=list)

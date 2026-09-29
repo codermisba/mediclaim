@@ -52,41 +52,81 @@ def _env_bool(name: str, default: bool) -> bool:
     return _env_str(name, str(default)).lower() in {"1", "true", "yes", "on"}
 
 
+#: Default model for the Hugging Face provider. Qwen 72B is served by HF
+#: Inference Providers with a generous free tier and follows JSON instructions
+#: reliably, which matters because the agents validate every response against a
+#: Pydantic schema. Override per role with HF_MODEL_* in .env.
+DEFAULT_HF_MODEL = "Qwen/Qwen2.5-72B-Instruct"
+
+#: Alternative HF models worth trying if the default is busy or unavailable.
+#: Check GET /api/health after changing - it probes the live endpoint.
+HF_MODEL_SUGGESTIONS = (
+    "Qwen/Qwen2.5-72B-Instruct",
+    "deepseek-ai/DeepSeek-V3-0324",
+    "meta-llama/Llama-3.3-70B-Instruct",
+    "mistralai/Mistral-Small-24B-Instruct-2501",
+    "google/gemma-3-27b-it",
+)
+
+
 @dataclass(frozen=True)
 class Settings:
     """Application settings resolved from environment variables."""
 
-    # --- Gemini ---------------------------------------------------------
-    gemini_api_key: str = field(default_factory=lambda: _env_str("GEMINI_API_KEY", ""))
-    #: Set to 1 to run the deterministic pipeline even when a key is present.
+    # --- AI provider ----------------------------------------------------
+    # ``huggingface`` (default), ``gemini`` or ``offline``. ``offline`` forces
+    # the deterministic reader even when a token is present.
+    ai_provider: str = field(
+        default_factory=lambda: _env_str("AI_PROVIDER", "huggingface").lower()
+    )
+    #: Set to 1 to run the deterministic pipeline even when a token is present.
     #: Useful for demos, cost control and verifying the offline path.
     force_offline: bool = field(default_factory=lambda: _env_bool("FORCE_OFFLINE", False))
 
-    # Gemini 3.x is the current generation: the 2.5 models are retired for new
-    # API keys and now fail with 404 NOT_FOUND. Flash handles the fast
-    # multimodal extraction work; the pro model is only worth its cost for the
-    # consistency review, so it is opt-in via .env. All overridable.
-    model_extraction: str = field(
+    # --- Hugging Face (default provider) --------------------------------
+    hf_token: str = field(default_factory=lambda: _env_str("HF_TOKEN", ""))
+    #: OpenAI-compatible chat endpoint exposed by HF Inference Providers.
+    hf_base_url: str = field(
+        default_factory=lambda: _env_str("HF_BASE_URL", "https://router.huggingface.co/v1")
+    )
+    hf_model_extraction: str = field(
+        default_factory=lambda: _env_str("HF_MODEL_EXTRACTION", DEFAULT_HF_MODEL)
+    )
+    hf_model_reasoning: str = field(
+        default_factory=lambda: _env_str("HF_MODEL_REASONING", DEFAULT_HF_MODEL)
+    )
+    hf_model_review: str = field(
+        default_factory=lambda: _env_str("HF_MODEL_REVIEW", DEFAULT_HF_MODEL)
+    )
+
+    # --- Google Gemini (optional alternative) ---------------------------
+    gemini_api_key: str = field(default_factory=lambda: _env_str("GEMINI_API_KEY", ""))
+    #: Gemini 3.x is current generation; 2.5 is retired for new keys (404).
+    gemini_model_extraction: str = field(
         default_factory=lambda: _env_str("GEMINI_MODEL_EXTRACTION", "gemini-3.8-flash")
     )
-    model_reasoning: str = field(
+    gemini_model_reasoning: str = field(
         default_factory=lambda: _env_str("GEMINI_MODEL_REASONING", "gemini-3.8-flash")
     )
-    model_review: str = field(
+    gemini_model_review: str = field(
         default_factory=lambda: _env_str("GEMINI_MODEL_REVIEW", "gemini-3.8-flash")
     )
 
     temperature_extraction: float = field(
-        default_factory=lambda: _env_float("GEMINI_TEMPERATURE_EXTRACTION", 0.0)
+        default_factory=lambda: _env_float(
+            "AI_TEMPERATURE_EXTRACTION", _env_float("GEMINI_TEMPERATURE_EXTRACTION", 0.0)
+        )
     )
     temperature_reasoning: float = field(
-        default_factory=lambda: _env_float("GEMINI_TEMPERATURE_REASONING", 0.1)
+        default_factory=lambda: _env_float(
+            "AI_TEMPERATURE_REASONING", _env_float("GEMINI_TEMPERATURE_REASONING", 0.1)
+        )
     )
     request_timeout: int = field(
-        default_factory=lambda: _env_int("GEMINI_REQUEST_TIMEOUT", 180)
+        default_factory=lambda: _env_int("AI_REQUEST_TIMEOUT", _env_int("GEMINI_REQUEST_TIMEOUT", 180))
     )
     max_attempts: int = field(
-        default_factory=lambda: _env_int("GEMINI_MAX_ATTEMPTS", 3)
+        default_factory=lambda: _env_int("AI_MAX_ATTEMPTS", _env_int("GEMINI_MAX_ATTEMPTS", 3))
     )
 
     # --- Uploads --------------------------------------------------------
@@ -106,7 +146,7 @@ class Settings:
     # --- Server ---------------------------------------------------------
     cors_origins: str = field(
         default_factory=lambda: _env_str(
-            "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+            "CORS_ORIGINS", "http://localhost:5174,http://127.0.0.1:5174"
         )
     )
     log_level: str = field(default_factory=lambda: _env_str("LOG_LEVEL", "INFO"))
@@ -118,10 +158,57 @@ class Settings:
 
     @property
     def gemini_configured(self) -> bool:
-        if self.force_offline:
+        if self.force_offline or self.ai_provider not in {"gemini", "huggingface"}:
             return False
         key = self.gemini_api_key
-        return bool(key) and not key.startswith("your_")
+        return self.ai_provider == "gemini" and bool(key) and not key.startswith("your_")
+
+    @property
+    def hf_configured(self) -> bool:
+        """True only when HF is the selected provider *and* a real token exists."""
+        if self.force_offline or self.ai_provider != "huggingface":
+            return False
+        token = self.hf_token
+        return bool(token) and not token.startswith("your_")
+
+    @property
+    def ai_mode(self) -> str:
+        """``huggingface`` / ``gemini`` / ``offline_deterministic``.
+
+        This is the single value the pipeline and UI key off, so a stage that
+        never reached a model is always distinguishable from one that did.
+        """
+        if self.hf_configured:
+            return "huggingface"
+        if self.gemini_configured:
+            return "gemini"
+        return "offline_deterministic"
+
+    @property
+    def model_extraction(self) -> str:
+        return (
+            self.gemini_model_extraction
+            if self.ai_provider == "gemini"
+            else self.hf_model_extraction
+        )
+
+    @property
+    def model_reasoning(self) -> str:
+        return (
+            self.gemini_model_reasoning
+            if self.ai_provider == "gemini"
+            else self.hf_model_reasoning
+        )
+
+    @property
+    def model_review(self) -> str:
+        return self.gemini_model_review if self.ai_provider == "gemini" else self.hf_model_review
+
+    @property
+    def configured_models(self) -> list[str]:
+        """Unique model names that will actually be called, in call order."""
+        return list(dict.fromkeys([self.model_extraction, self.model_reasoning, self.model_review]))
+
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -136,7 +223,8 @@ class Settings:
         return {
             "app_name": self.app_name,
             "app_version": self.app_version,
-            "ai_mode": "gemini" if self.gemini_configured else "offline_deterministic",
+            "ai_mode": self.ai_mode,
+            "provider": self.ai_provider,
             "models": {
                 "extraction": self.model_extraction,
                 "reasoning": self.model_reasoning,
@@ -163,6 +251,8 @@ __all__ = [
     "Settings",
     "settings",
     "get_settings",
+    "DEFAULT_HF_MODEL",
+    "HF_MODEL_SUGGESTIONS",
     "BACKEND_DIR",
     "PROJECT_ROOT",
     "DATA_DIR",

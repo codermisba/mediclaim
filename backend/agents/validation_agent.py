@@ -1,4 +1,4 @@
-"""Agent 3 - Validation.
+﻿"""Agent 3 - Validation.
 
 Two layers:
 
@@ -30,7 +30,7 @@ from models.schemas import (
     Issue,
     ValidationResult,
 )
-from services import gemini, normalize
+from services import llm, normalize
 from services.normalize import clean_text, is_blank
 
 logger = logging.getLogger("mediclaim.agent.validation")
@@ -464,7 +464,7 @@ async def run(
     used_ai = False
     degrade_note = ""
 
-    if gemini.ai_mode() == "gemini":
+    if llm.ai_mode() != "offline_deterministic":
         vocabulary = "\n".join(
             [f"- {path}: {label} (required)" for path, label in REQUIRED_CLAIM_FIELDS.items()]
             + [f"- {path}: {label} (optional)" for path, label in OPTIONAL_CLAIM_FIELDS.items()]
@@ -473,9 +473,9 @@ async def run(
             claim_block=_claim_block(claim),
             vocabulary=vocabulary,
             already_checked="\n".join(f"- {line}" for line in already_checked) or "- nothing",
-            schema=gemini.schema_hint(ValidationResult),
+            schema=llm.schema_hint(ValidationResult),
         )
-        model_result, degrade_note = await gemini.try_structured(
+        model_result, degrade_note = await llm.try_structured(
             model_name=settings.model_reasoning,
             system_instruction=SYSTEM_INSTRUCTION,
             prompt=prompt,

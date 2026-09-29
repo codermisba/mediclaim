@@ -6,12 +6,12 @@ export default defineConfig(({ mode }) => {
   // frontend/.env.local, not just VITE_* ones, because this is a dev-server
   // setting that must never be bundled into the browser build.
   const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env }
-  const backend = env.BACKEND_URL || 'http://127.0.0.1:8000'
+  const backend = env.BACKEND_URL || 'http://127.0.0.1:8080'
 
   return {
     plugins: [react()],
     server: {
-      port: Number(env.FRONTEND_PORT) || 5173,
+      port: Number(env.FRONTEND_PORT) || 5174,
       // The UI talks to the FastAPI backend through this proxy, so the browser
       // only ever makes same-origin requests (no CORS surprises in development).
       proxy: {

@@ -199,7 +199,7 @@ Tested with:
 
 # API Key Configuration
 
-The Gemini API key is stored in a single `.env` file at the project root.
+The model token is stored in a single `.env` file at the project root.
 
 Example:
 
@@ -215,31 +215,73 @@ cd E:\WEB\mediclaim\claimgen-ai-solo
 copy .env.example .env
 ```
 
-Open `.env` and add your Gemini API key:
+## Provider selection
+
+`AI_PROVIDER` decides which backend runs the model calls:
+
+| Value | Needs | Use it when |
+|---|---|---|
+| `huggingface` **(default)** | `HF_TOKEN` | Normal use - free tier, OpenAI-compatible router |
+| `gemini` | `GEMINI_API_KEY` | You have Google quota and prefer Gemini |
+| `offline` | nothing | Demos, cost control, verifying the deterministic path |
+
+## Hugging Face (default)
+
+1. Create a token - free, and **Read** permission is enough:
+   [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+2. Open `.env` and paste it:
 
 ```env
+AI_PROVIDER=huggingface
+HF_TOKEN=PASTE_YOUR_REAL_TOKEN_HERE
+```
+
+3. Pick a model (any model served by HF Inference Providers):
+
+```env
+HF_MODEL_EXTRACTION=Qwen/Qwen2.5-72B-Instruct
+HF_MODEL_REASONING=Qwen/Qwen2.5-72B-Instruct
+HF_MODEL_REVIEW=Qwen/Qwen2.5-72B-Instruct
+```
+
+Alternatives if the default is busy: `deepseek-ai/DeepSeek-V3-0324`,
+`meta-llama/Llama-3.3-70B-Instruct`, `mistralai/Mistral-Small-24B-Instruct-2501`,
+`google/gemma-3-27b-it`.
+
+4. Restart the backend and confirm:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8080/api/health | ConvertTo-Json -Depth 5
+```
+
+`mode` should be `huggingface` and `status` should be `ok`.
+
+## Google Gemini (optional)
+
+Set `AI_PROVIDER=gemini` in `.env` and add your key:
+
+```env
+AI_PROVIDER=gemini
 GEMINI_API_KEY=PASTE_YOUR_REAL_KEY_HERE
+GEMINI_MODEL_EXTRACTION=gemini-3.8-flash
+GEMINI_MODEL_REASONING=gemini-3.8-flash
+GEMINI_MODEL_REVIEW=gemini-3.8-flash
 ```
 
-Get a Gemini API key from:
+Get a key from [https://aistudio.google.com/apikey](https://aistudio.google.com/apikey).
 
-[https://aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+> **Security:** Never commit your real key or token to GitHub. `.gitignore`
+> excludes `.env`, and `.env` is never pushed - verify with `git ls-files | findstr .env`
+> before your first push.
 
-> **Security:** Never commit your real API key to GitHub. The `.gitignore` file should exclude `.env`.
-
-The backend can also automatically load:
-
-```text
-backend/.env
-```
-
-if you prefer to keep the API key local to the backend.
+The backend can also automatically load `backend/.env` if you prefer to keep the
+token local to the backend.
 
 ---
 
 # Running Without an API Key
 
-Leaving `GEMINI_API_KEY` blank is supported.
+Leaving `HF_TOKEN` blank (and `GEMINI_API_KEY` blank) is supported.
 
 The application then runs in:
 
@@ -309,20 +351,20 @@ py -m uvicorn main:app --reload
 The backend will be available at:
 
 ```text
-http://127.0.0.1:8000
+http://127.0.0.1:8080
 ```
 
 FastAPI documentation:
 
 ```text
-http://127.0.0.1:8000/docs
+http://127.0.0.1:8080/docs
 ```
 
 ---
 
 # Running the Backend on Another Port
 
-If port `8000` is already being used, you may see:
+If port `8080` is already being used, you may see:
 
 ```text
 WinError 10013
@@ -351,13 +393,13 @@ with:
 
 ```ini
 BACKEND_URL=http://127.0.0.1:8020
-FRONTEND_PORT=5173
+FRONTEND_PORT=5174
 ```
 
-To see what is using port `8000`:
+To see what is using port `8080`:
 
 ```powershell
-Get-NetTCPConnection -State Listen -LocalPort 8000
+Get-NetTCPConnection -State Listen -LocalPort 8080
 ```
 
 ---
@@ -385,7 +427,7 @@ npm run dev
 Open:
 
 ```text
-http://localhost:5173
+http://localhost:5174
 ```
 
 Vite proxies `/api` requests to the backend, so the browser uses same-origin API requests during development.
@@ -400,7 +442,7 @@ For example:
 
 ```ini
 BACKEND_URL=http://127.0.0.1:8020
-FRONTEND_PORT=5173
+FRONTEND_PORT=5174
 ```
 
 These values configure the development server and are not bundled into the browser build.
@@ -412,7 +454,7 @@ These values configure the development server and are not bundled into the brows
 1. Open:
 
    ```text
-   http://localhost:5173
+   http://localhost:5174
    ```
 
 2. Leave **Use sample data** selected.
@@ -586,7 +628,7 @@ The `/api/health` endpoint performs actual model requests.
 Run:
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:8000/api/health | ConvertTo-Json -Depth 5
+Invoke-RestMethod http://127.0.0.1:8080/api/health | ConvertTo-Json -Depth 5
 ```
 
 The endpoint reports model availability and classifies failures.
@@ -677,7 +719,7 @@ See `.env.example` for the complete configuration reference.
 | `FORCE_OFFLINE`           | `0`                | Set to `1` to disable AI processing.            |
 | `MAX_UPLOAD_MB`           | `20`               | Maximum upload size per file.                   |
 | `MAX_DOCUMENTS_PER_CLAIM` | `10`               | Maximum number of documents per claim.          |
-| `CORS_ORIGINS`            | `localhost:5173`   | Allowed browser origins.                        |
+| `CORS_ORIGINS`            | `localhost:5174`   | Allowed browser origins.                        |
 | `PERSIST_CLAIMS`          | `true`             | Enables claim persistence.                      |
 
 ---
@@ -760,19 +802,19 @@ When the backend is running, FastAPI provides interactive API documentation.
 Swagger UI:
 
 ```text
-http://127.0.0.1:8000/docs
+http://127.0.0.1:8080/docs
 ```
 
 OpenAPI schema:
 
 ```text
-http://127.0.0.1:8000/openapi.json
+http://127.0.0.1:8080/openapi.json
 ```
 
 Health endpoint:
 
 ```text
-http://127.0.0.1:8000/api/health
+http://127.0.0.1:8080/api/health
 ```
 
 ---
@@ -783,7 +825,7 @@ http://127.0.0.1:8000/api/health
 
 ### Cause
 
-Port `8000` is already being used.
+Port `8080` is already being used.
 
 ### Solution
 
@@ -801,7 +843,7 @@ frontend/.env.local
 
 ```ini
 BACKEND_URL=http://127.0.0.1:8020
-FRONTEND_PORT=5173
+FRONTEND_PORT=5174
 ```
 
 ---
@@ -818,7 +860,7 @@ Check that:
 Test:
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:8000/api/health
+Invoke-RestMethod http://127.0.0.1:8080/api/health
 ```
 
 ---
@@ -828,7 +870,7 @@ Invoke-RestMethod http://127.0.0.1:8000/api/health
 Check:
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:8000/api/health | ConvertTo-Json -Depth 5
+Invoke-RestMethod http://127.0.0.1:8080/api/health | ConvertTo-Json -Depth 5
 ```
 
 The response identifies the failing model and failure category.

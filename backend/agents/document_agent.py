@@ -1,4 +1,4 @@
-"""Agent 1 - Document Understanding.
+﻿"""Agent 1 - Document Understanding.
 
 Reads every uploaded PDF / image with Gemini's multimodal capabilities and
 returns a flat, structured snapshot of everything literally present in the
@@ -13,7 +13,7 @@ from typing import Dict, List, Sequence, Tuple
 
 from config import settings
 from models.schemas import DocumentMeta, DocumentUnderstanding
-from services import gemini
+from services import llm
 from services.offline import read_documents_offline
 
 logger = logging.getLogger("mediclaim.agent.document")
@@ -99,7 +99,7 @@ async def run(
         for index, document in enumerate(documents, start=1)
     )
 
-    if gemini.ai_mode() != "gemini":
+    if llm.ai_mode() == "offline_deterministic":
         understanding, detected = read_documents_offline(documents)
         return (
             understanding,
@@ -112,10 +112,10 @@ async def run(
     prompt = PROMPT_TEMPLATE.format(
         user_note=_user_note(user_notes),
         attachments=attachment_lines or "(none)",
-        schema=gemini.schema_hint(DocumentUnderstanding),
+        schema=llm.schema_hint(DocumentUnderstanding),
     )
 
-    result, notice = await gemini.try_structured(
+    result, notice = await llm.try_structured(
         model_name=settings.model_extraction,
         system_instruction=SYSTEM_INSTRUCTION,
         prompt=prompt,

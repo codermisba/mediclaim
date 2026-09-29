@@ -13,12 +13,19 @@ python-multipart>=0.0.12          # required for multipart/form-data uploads
 python-dotenv>=1.0.1
 pydantic>=2.9.0
 
-# --- Google Gen AI SDK (official) -----------------------------------------
+# --- Hugging Face Inference Providers (default AI provider) ---------------
+# The backend POSTs to the OpenAI-compatible router directly so HTTP status
+# codes reach the error classifier unchanged (401 token, 404 model,
+# 429 rate limit, 503 provider overloaded).
+requests>=2.31.0
+
+# --- Google Gemini (optional alternative, AI_PROVIDER=gemini) -------------
 google-genai>=1.0.0
 
 # --- Deterministic PDF generation -----------------------------------------
 reportlab>=4.2.0
 
-# --- Optional: embedded text layer of sample PDFs in offline mode ---------
-# Only used when GEMINI_API_KEY is missing, so the demo still runs end to end.
+# --- Optional: embedded text layer of PDFs in offline / HF mode -----------
+# HF text models cannot ingest PDFs, so the embedded layer is read first and
+# passed as text. Also keeps the no-token demo running end to end.
 pypdf>=5.1.0
