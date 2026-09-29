@@ -1,4 +1,5 @@
 import { Empty, Field, Money } from './Primitives.jsx'
+import api from '../api.js'
 
 /** The generated claim plus the download link for the rendered PDF. */
 export default function GeneratedPanel({ claim }) {
@@ -21,7 +22,13 @@ export default function GeneratedPanel({ claim }) {
       <header>
         <h2>Generated claim</h2>
         <span className="spacer" style={{ flex: 1 }} />
-        <a className="btn primary sm" href={`/api/claim/${claim.claim_id}/pdf`} target="_blank" rel="noreferrer">
+        <a
+          className="btn primary sm"
+          href={api.pdfUrl(claim.claim_id)}
+          target="_blank"
+          rel="noreferrer"
+          download
+        >
           Download PDF
         </a>
       </header>

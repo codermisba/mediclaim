@@ -126,7 +126,7 @@ export default function App() {
   return (
     <div className="app">
       <div className="topbar">
-        <div>
+        <div className="brand">
           <h1>
             <span className="logo">M</span>
             MediClaim &middot; ClaimGen AI
@@ -219,7 +219,7 @@ export default function App() {
           </div>
         </div>
 
-        <main>
+        <main className="content">
           <ErrorBanner error={error} onClose={() => setError(null)} />
 
           {!claim ? (
@@ -230,7 +230,7 @@ export default function App() {
             </div>
           ) : (
             <>
-              <div className="card">
+              <div className="card claim-header">
                 <header>
                   <h2>{claim.title}</h2>
                   <Pill status={claim.status} />
@@ -247,7 +247,7 @@ export default function App() {
                     </div>
                   ) : null}
 
-                  <div className="row">
+                  <div className="row action-toolbar">
                     <button
                       className="btn primary"
                       disabled={busy !== null}
