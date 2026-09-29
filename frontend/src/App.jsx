@@ -21,6 +21,7 @@ export default function App() {
   const [claim, setClaim] = useState(null)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(null)
+  const [formGap, setFormGap] = useState(0)
   const timer = useRef(null)
   // A free-tier host can take ~50s to wake, which is far longer than POLL_MS.
   // Without this guard, overlapping polls pile up and hammer the API.
@@ -177,11 +178,18 @@ export default function App() {
           {claim.ai_notice}
         </NoticeBanner>
       ) : null}
+      {formGap > 0 ? (
+        <NoticeBanner tone="warning" title={`Created with ${formGap} required field${formGap === 1 ? '' : 's'} still empty`}>
+          The claim was saved, but the agents will flag the missing data during validation. Open
+          <b> Enter my own</b> again to complete it before running the pipeline.
+        </NoticeBanner>
+      ) : null}
 
       <div className="layout">
         <div className="sidebar">
           <NewClaimForm
-            onCreated={async (id) => {
+            onCreated={async (id, gap = 0) => {
+              setFormGap(gap)
               await refreshList()
               await select(id)
             }}
