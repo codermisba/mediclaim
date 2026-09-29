@@ -388,13 +388,19 @@ async def run_structured(
     original = build_messages(system_instruction, prompt, documents)
     messages = original
     dropped_images = False
+    # Not every provider on the router accepts OpenAI's response_format; if one
+    # rejects it we fall back to prompt-driven JSON, which _coerce can parse.
+    json_mode = True
+    dropped_json_mode = False
 
     last_error: Optional[ModelError] = None
+    attempt = 0
 
-    for attempt in range(1, attempts + 1):
+    while attempt < attempts:
+        attempt += 1
         try:
             data = await asyncio.to_thread(
-                _post, _payload(model_name, messages, temperature)
+                _post, _payload(model_name, messages, temperature, json_mode)
             )
             return _coerce(_content_text(data), response_model, model_name)
         except ModelError as exc:
@@ -406,15 +412,24 @@ async def run_structured(
 
         # A text-only model rejecting an image is a configuration detail, not a
         # dead end: retry once with the text (which includes extracted PDF text).
-        if (
-            last_error.kind == "content"
-            and not dropped_images
-            and _has_images(messages)
-        ):
+        if last_error.kind == "content" and not dropped_images and _has_images(messages):
             logger.info("Retrying %s without image attachments", model_name)
             messages = _without_images(original)
             dropped_images = True
             last_error = None
+            attempt -= 1  # this is a payload fix, not a real attempt
+            continue
+
+        if (
+            last_error.kind == "content"
+            and not dropped_json_mode
+            and any(word in last_error.message.lower() for word in ("response_format", "json_object", "json mode", "json schema"))
+        ):
+            logger.info("Retrying %s without response_format", model_name)
+            json_mode = False
+            dropped_json_mode = True
+            last_error = None
+            attempt -= 1
             continue
 
         if last_error.kind in {"auth", "model", "quota"}:
