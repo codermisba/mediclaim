@@ -14,6 +14,7 @@ UI hints stay identical across providers.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional, Sequence, Type, TypeVar
 
@@ -86,10 +87,11 @@ def configured_models() -> List[str]:
 
 
 async def verify_models(force: bool = False) -> Dict[str, Dict[str, str]]:
+    """Probe every configured model in a worker thread (the probe blocks on I/O)."""
     module = configured_module()
     if module is None:
         return {}
-    return module.verify_models(force=force)
+    return await asyncio.to_thread(module.verify_models, force)
 
 
 def get_client():

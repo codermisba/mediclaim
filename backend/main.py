@@ -146,7 +146,7 @@ async def health() -> HealthResponse:
     if status["mode"] != "offline_deterministic":
         # Prove the configured models actually answer. A valid token is not
         # enough - retired or unserved model names still authenticate cleanly.
-        checks = await asyncio.to_thread(llm.verify_models)
+        checks = await llm.verify_models()
         broken = {m: c for m, c in checks.items() if c.get("ok") != "true"}
         if broken:
             provider = "Hugging Face" if status["mode"] == "huggingface" else "Gemini"

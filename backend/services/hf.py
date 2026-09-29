@@ -111,6 +111,29 @@ def classify_exception(exc: Exception, model_name: str = "") -> ModelError:
             "Hugging Face quota exhausted",
         )
 
+    # The router rejects unsupported content types with a whole spread of
+    # client codes - we have seen 400 and 405 for the same "model does not
+    # accept image input" case. Match on the message, then let the caller drop
+    # the images and retry with text only.
+    if status < 500 and any(
+        word in lowered
+        for word in (
+            "image",
+            "vision",
+            "multimodal",
+            "does not accept",
+            "content type",
+            "content-type",
+        )
+    ):
+        return ModelError(
+            f"The model {model_name} rejected an attachment: {text[:160]}",
+            hint="Set HF_MODEL_EXTRACTION to a vision-capable model, or leave images out.",
+            model=model_name,
+            kind="content",
+            code="hf_error",
+        )
+
     if status in {500, 502, 503, 504} or "not running" in lowered or "unavailable" in lowered:
         return error(
             "overloaded",
@@ -119,17 +142,7 @@ def classify_exception(exc: Exception, model_name: str = "") -> ModelError:
             "Hugging Face is temporarily overloaded",
         )
 
-    if status == 400:
-        # A text-only model rejecting an image is the common case here; the
-        # caller downgrades this to an image-free retry before failing.
-        if any(word in lowered for word in ("image", "vision", "multimodal", "content type")):
-            return ModelError(
-                f"The model {model_name} rejected an attachment: {text[:160]}",
-                hint="Set HF_MODEL_EXTRACTION to a vision model, or leave the images out.",
-                model=model_name,
-                kind="content",
-                code="hf_error",
-            )
+    if status == 400 or status == 405 or status == 422:
         return error(
             "content",
             "Hugging Face rejected the request payload. Check the uploaded documents "
@@ -463,11 +476,14 @@ async def try_structured(**kwargs: Any) -> tuple[Optional[Any], str]:
     call, so when this returns ``(None, note)`` the caller keeps that result and
     reports ``used_ai = False``. Real misconfiguration (bad token, unknown model)
     still raises, because a silent fallback would hide a bug the user must fix.
+    ``content`` degrades too: run_structured only raises it after exhausting its
+    retries on malformed JSON, at which point the deterministic answer is
+    strictly better than a failed claim - and the note still discloses it.
     """
     try:
         return await run_structured(**kwargs), ""
     except ModelError as exc:
-        if exc.kind not in {"quota", "overloaded"}:
+        if exc.kind not in {"quota", "overloaded", "content"}:
             raise
         note = (
             f"Hugging Face was unavailable for this stage ({exc.kind}: {exc.message}) "
